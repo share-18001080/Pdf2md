@@ -1,18 +1,19 @@
-name: PDF to Markdown
+name: PDF to Markdown (Marker - LaTeX Support)
 
 on:
   push:
     paths:
       - "**.pdf"
-      - convert.py
+      - convert_marker.py
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  convert:
+  convert-with-marker:
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -21,9 +22,9 @@ jobs:
           python-version: "3.11"
           cache: "pip"
       
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-marker.txt
       
-      - run: python convert.py
+      - run: python convert_marker.py
       
       - name: Git Commit
         if: success()
@@ -32,7 +33,7 @@ jobs:
           git config user.name "bot"
           git add -A
           git diff --quiet && exit 0
-          git commit -m "PDF to MD conversion"
+          git commit -m "Auto-convert: PDF to Markdown (Marker + LaTeX)"
           git push
       
       - uses: actions/upload-artifact@v4
