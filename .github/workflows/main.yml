@@ -1,0 +1,164 @@
+name: 📄 Convert PDF to Markdown
+
+# Trigger khi có push hoặc có thể chạy thủ công
+on:
+  push:
+    paths:
+      - '**.pdf'  # Chỉ chạy khi có file PDF mới được push
+  workflow_dispatch:  # Cho phép chạy thủ công từ GitHub UI
+  
+# Quyền cần thiết để commit kết quả
+permissions:
+  contents: write
+
+jobs:
+  convert-pdfs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 1. Checkout repository
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Lấy toàn bộ lịch sử git
+    
+    # 2. Setup Python
+    - name: 🐍 Setup Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'  # Cache pip dependencies để tăng tốc
+    
+    # 3. Cài đặt dependencies
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pymupdf4llm
+    
+    # 4. Tìm và chuyển đổi tất cả file PDF
+    - name: 🔄 Convert all PDFs to Markdown
+      run: |
+        python << 'EOF'
+        import pymupdf4llm
+        from pathlib import Path
+        import sys
+        
+        def convert_pdf_to_markdown(pdf_path):
+            """Chuyển đổi một file PDF sang Markdown"""
+            try:
+                print(f"📄 Converting: {pdf_path}")
+                
+                # Chuyển đổi PDF sang Markdown
+                md_text = pymupdf4llm.to_markdown(str(pdf_path))
+                
+                # Tạo đường dẫn output (giữ nguyên cấu trúc thư mục)
+                md_path = pdf_path.with_suffix('.md')
+                
+                # Ghi file Markdown
+                md_path.write_text(md_text, encoding='utf-8')
+                
+                print(f"✅ Converted successfully: {md_path}")
+                return True
+                
+            except Exception as e:
+                print(f"❌ Error converting {pdf_path}: {str(e)}")
+                return False
+        
+        # Tìm tất cả file PDF trong thư mục hiện hành và thư mục con
+        pdf_files = list(Path('.').rglob('*.pdf'))
+        
+        if not pdf_files:
+            print("⚠️  No PDF files found in repository")
+            sys.exit(0)
+        
+        print(f"🔍 Found {len(pdf_files)} PDF file(s)")
+        print("-" * 60)
+        
+        # Chuyển đổi từng file
+        success_count = 0
+        failed_count = 0
+        
+        for pdf_file in pdf_files:
+            # Bỏ qua các thư mục ẩn như .git
+            if any(part.startswith('.') for part in pdf_file.parts):
+                continue
+                
+            if convert_pdf_to_markdown(pdf_file):
+                success_count += 1
+            else:
+                failed_count += 1
+        
+        print("-" * 60)
+        print(f"✨ Conversion complete!")
+        print(f"   ✅ Success: {success_count}")
+        print(f"   ❌ Failed: {failed_count}")
+        
+        # Exit với code 1 nếu có lỗi
+        if failed_count > 0:
+            sys.exit(1)
+        
+        EOF
+    
+    # 5. Tạo summary report
+    - name: 📊 Generate conversion summary
+      if: always()
+      run: |
+        echo "## 📄 PDF to Markdown Conversion Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Repository:** `${{ github.repository }}`" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** `${{ github.ref_name }}`" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** `${{ github.sha }}`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Đếm số file PDF và MD
+        PDF_COUNT=$(find . -name "*.pdf" -not -path "./.git/*" | wc -l)
+        MD_COUNT=$(find . -name "*.md" -not -path "./.git/*" -not -name "README.md" | wc -l)
+        
+        echo "### Conversion Statistics" >> $GITHUB_STEP_SUMMARY
+        echo "- 📄 PDF files found: **${PDF_COUNT}**" >> $GITHUB_STEP_SUMMARY
+        echo "- 📝 Markdown files generated: **${MD_COUNT}**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # List các file đã convert
+        if [ $MD_COUNT -gt 0 ]; then
+          echo "### Generated Files" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          find . -name "*.md" -not -path "./.git/*" -not -name "README.md" -exec echo {} ; >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    # 6. Upload artifacts (các file Markdown đã convert)
+    - name: 📤 Upload Markdown files as artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: converted-markdown-files
+        path: |
+          **/*.md
+          !README.md
+          !.github/**
+        retention-days: 30
+        if-no-files-found: warn
+    
+    # 7. Commit và push kết quả về repository (tùy chọn)
+    - name: 💾 Commit converted Markdown files
+      if: success()
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Add tất cả file .md mới
+        git add **/*.md
+        
+        # Chỉ commit nếu có thay đổi
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "🤖 Auto-convert: PDF to Markdown [skip ci]
+          
+          - Converted by GitHub Actions
+          - Workflow: ${{ github.workflow }}
+          - Run: ${{ github.run_number }}"
+          
+          git push
+        fi
