@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - "**.pdf"
-      - convert_bootstrap.py
+      - convert.py
   workflow_dispatch:
 
 permissions:
