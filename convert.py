@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PDF to Markdown Converter - FINAL PRODUCTION VERSION
-Zero-error, production-ready code
+PDF to Markdown Converter - MARKER VERSION with LaTeX Support
+Optimized for academic papers & technical documents with formulas
 """
-import pymupdf4llm
-from pathlib import Path
-import sys
 import os
+import sys
 import traceback
+from pathlib import Path
+
+try:
+    from marker.convert import convert_single_pdf
+except ImportError:
+    print("ERROR: marker-pdf not installed. Run: pip install marker-pdf")
+    sys.exit(1)
 
 # ============================================================================
 # PHASE 1: ENVIRONMENT & VALIDATION
 # ============================================================================
 
 def validate_environment():
-    """Validate all prerequisites"""
+    """Validate prerequisites"""
     print("[INIT] Validating environment...")
     
     # Check Python version
@@ -24,12 +29,12 @@ def validate_environment():
         print(f"ERROR: Python 3.8+ required, got {py_version.major}.{py_version.minor}")
         return False
     
-    # Check PyMuPDF4LLM
+    # Check Marker
     try:
-        import pymupdf4llm as pdf_lib
-        print("[OK] PyMuPDF4LLM is available")
+        from marker.convert import convert_single_pdf
+        print("[OK] Marker is available")
     except ImportError as e:
-        print(f"ERROR: PyMuPDF4LLM import failed: {e}")
+        print(f"ERROR: Marker import failed: {e}")
         return False
     
     # Check write permissions
@@ -52,8 +57,6 @@ def discover_pdfs():
     excluded = []
     
     for pdf_path in Path(".").rglob("*.pdf"):
-        pdf_str = str(pdf_path)
-        
         # Skip .git and hidden directories
         parts = pdf_path.parts
         if any(part.startswith(".") for part in parts):
@@ -75,7 +78,6 @@ def should_convert(pdf_path):
     """Check if PDF needs conversion"""
     md_path = pdf_path.with_suffix(".md")
     
-    # If MD doesn't exist, always convert
     if not md_path.exists():
         return True, "MD file missing"
     
@@ -103,23 +105,32 @@ def filter_pdfs(pdf_list):
     return to_convert, to_skip
 
 # ============================================================================
-# PHASE 4: CONVERSION LOGIC
+# PHASE 4: CONVERSION WITH MARKER (LaTeX Support)
 # ============================================================================
 
-def convert_single_pdf(pdf_path):
-    """Convert one PDF to Markdown"""
+def convert_single_pdf_marker(pdf_path):
+    """Convert one PDF to Markdown using Marker"""
     try:
-        md_text = pymupdf4llm.to_markdown(
-            str(pdf_path),
-            page_chunks=False,
-            write_images=False
-        )
+        print(f"📄 Converting: {pdf_path}")
+        
+        # Marker returns (markdown, images, tables)
+        md_text, images, tables = convert_single_pdf(pdf_path)
+        
+        if not md_text:
+            return False, "Empty markdown output"
         
         md_path = pdf_path.with_suffix(".md")
         md_path.parent.mkdir(parents=True, exist_ok=True)
         md_path.write_text(md_text, encoding="utf-8")
         
+        # Log image count if extracted
+        if images:
+            print(f"      -> {md_path.name} [OK] ({len(images)} images extracted)")
+        else:
+            print(f"      -> {md_path.name} [OK]")
+        
         return True, "OK"
+        
     except Exception as e:
         return False, str(e)
 
@@ -128,11 +139,10 @@ def batch_convert(pdf_list):
     results = {"success": 0, "failed": 0, "errors": []}
     
     for i, (pdf_path, _) in enumerate(pdf_list, 1):
-        print(f"  [{i}/{len(pdf_list)}] Converting: {pdf_path}")
+        print(f"  [{i}/{len(pdf_list)}]", end=" ")
         
-        success, msg = convert_single_pdf(pdf_path)
+        success, msg = convert_single_pdf_marker(pdf_path)
         if success:
-            print(f"      -> {pdf_path.with_suffix('.md')} [OK]")
             results["success"] += 1
         else:
             print(f"      -> FAILED: {msg}")
@@ -155,11 +165,13 @@ def write_github_summary(total, skipped, converted, failed):
     
     try:
         content = (
-            "# PDF to Markdown Conversion Report\n\n"
+            "# PDF to Markdown Conversion Report (Marker)\n\n"
+            "## LaTeX Support ✅\n\n"
             f"- Total PDFs: **{total}**\n"
             f"- Skipped: **{skipped}**\n"
             f"- Converted: **{converted}**\n"
-            f"- Failed: **{failed}**\n"
+            f"- Failed: **{failed}**\n\n"
+            "**Note:** Marker properly wraps LaTeX formulas in `$$...$$` format.\n"
         )
         
         with open(step_summary, "a", encoding="utf-8") as f:
@@ -175,7 +187,7 @@ def write_github_summary(total, skipped, converted, failed):
 
 def main():
     print("\n" + "="*70)
-    print("PDF to MARKDOWN CONVERTER - PRODUCTION v6")
+    print("PDF to MARKDOWN CONVERTER - MARKER v7 (LaTeX Support)")
     print("="*70)
     
     # Phase 1: Validate
@@ -205,8 +217,9 @@ def main():
         write_github_summary(len(pdf_list), len(to_skip), 0, 0)
         return 0
     
-    # Phase 4: Convert
-    print("\n[CONVERT] Starting conversion...")
+    # Phase 4: Convert with Marker
+    print("\n[CONVERT] Starting conversion with Marker (LaTeX support)...")
+    print("-" * 70)
     results = batch_convert(to_convert)
     
     # Phase 5: Summary
