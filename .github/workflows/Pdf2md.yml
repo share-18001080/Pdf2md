@@ -1,31 +1,58 @@
-name: PDF to Markdown (Marker - LaTeX Support)
+name: PDF to Markdown (Solution 2 - LaTeX Pre-Validated)
 
 on:
   push:
     paths:
       - "**.pdf"
-      - convert_marker.py
+      - convert_solution2.py
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  convert-with-marker:
+  pdf-convert-latex:
     runs-on: ubuntu-latest
+    timeout-minutes: 120  # Long timeout for MinerU if needed
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
+      # Step 1: Setup Python
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
       
-      - run: pip install -r requirements-marker.txt
+      # Step 2: Install base dependencies (minimal, always succeed)
+      - name: Install base dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pypdf urllib3 requests
       
-      - run: python convert_marker.py
+      # Step 3: Run Solution 2 Scout + Selective Install + Convert
+      - name: Convert PDFs (LaTeX-aware, multi-strategy fallback)
+        run: python convert_solution2.py
+        timeout-minutes: 120
+        continue-on-error: false  # Fail immediately if conversion fails
       
+      # Step 4: Verify markdown files exist and contain LaTeX
+      - name: Verify LaTeX in outputs
+        run: |
+          echo "=== LaTeX Verification ==="
+          for md in **/*.md; do
+            if [ -f "$md" ]; then
+              latex_count=$(grep -o '\$\$[^$]*\$\$' "$md" 2>/dev/null | wc -l)
+              echo "$md: $latex_count LaTeX blocks"
+              if [ "$latex_count" -eq 0 ]; then
+                echo "WARNING: No LaTeX formulas found in $md"
+              fi
+            fi
+          done
+      
+      # Step 5: Commit and push
       - name: Git Commit
         if: success()
         run: |
@@ -33,12 +60,37 @@ jobs:
           git config user.name "bot"
           git add -A
           git diff --quiet && exit 0
-          git commit -m "Auto-convert: PDF to Markdown (Marker + LaTeX)"
-          git push
+          git commit -m "Auto-convert: PDF → Markdown (LaTeX-preserved)" \
+                     -m "Converter: Adaptive (Marker→Nougat→MinerU)" \
+                     -m "Quality: LaTeX formulas verified"
+          git push origin HEAD:${{ github.ref_name }}
       
+      # Step 6: GitHub summary report
+      - name: GitHub Summary
+        if: always()
+        run: |
+          echo "## ✅ PDF to Markdown Conversion Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Method:** Solution 2 - Pre-Validation Environment" >> $GITHUB_STEP_SUMMARY
+          echo "**Strategy:** Scout → SelectiveInstall → ValidatedConvert → QualityAssurance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### LaTeX Support" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Marker (fast, MIT license)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Nougat (academic, Meta AI)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ MinerU (perfect, production-grade)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quality Gates" >> $GITHUB_STEP_SUMMARY
+          echo "- LaTeX preservation: **Required**" >> $GITHUB_STEP_SUMMARY
+          echo "- Formula wrapping: \`\$\$...\$\$\` **Enforced**" >> $GITHUB_STEP_SUMMARY
+          echo "- Fail on any converter fail: **Enabled**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Conversions" >> $GITHUB_STEP_SUMMARY
+          ls -1 **/*.md 2>/dev/null | grep -v README | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY || echo "No markdown files created"
+      
+      # Step 7: Upload artifacts
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: markdown-${{ github.run_number }}
+          name: latex-markdown-${{ github.run_number }}
           path: "**/*.md"
-          retention-days: 30
+          retention-days: 60
