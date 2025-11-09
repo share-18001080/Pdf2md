@@ -1,55 +1,43 @@
-name: PDF to Markdown Converter
+name: PDF to Markdown
 
 on:
   push:
     paths:
-      - '**.pdf'
-      - 'convert.py'
-      - 'requirements.txt'
+      - "**.pdf"
+      - convert.py
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  convert-pdfs:
+  convert:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-    
-    - name: Install
-      run: pip install -r requirements.txt
-    
-    - name: Convert PDFs
-      run: python convert.py
-    
-    - name: Commit Markdowns
-      if: success()
-      run: |
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git config user.name "github-actions[bot]"
-        git add -A
-        if git diff --staged --quiet; then
-          echo "No changes"
-        else
-          git commit -m "Auto-convert PDF to MD"
-          git push origin HEAD:${{ github.ref_name }}
-        fi
-    
-    - name: Upload Artifacts
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: markdowns-${{ github.run_number }}
-        path: '**/*.md'
-        retention-days: 30
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      
+      - run: pip install -r requirements.txt
+      
+      - run: python convert.py
+      
+      - name: Git Commit
+        if: success()
+        run: |
+          git config user.email "bot@github.com"
+          git config user.name "bot"
+          git add -A
+          git diff --quiet && exit 0
+          git commit -m "PDF to MD conversion"
+          git push
+      
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: markdown-${{ github.run_number }}
+          path: "**/*.md"
+          retention-days: 30
