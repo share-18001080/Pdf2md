@@ -1,10 +1,11 @@
-name: 📄 Convert PDF to Markdown
+name: 📄 PDF to Markdown Converter
 
 on:
   push:
     paths:
-      - '**.pdf'
-  workflow_dispatch:
+      - '**.pdf'           # Chỉ chạy khi có PDF mới/thay đổi
+      - 'convert.py'       # Hoặc khi script được cập nhật
+  workflow_dispatch:       # Cho phép chạy thủ công
 
 permissions:
   contents: write
@@ -16,22 +17,36 @@ jobs:
     steps:
     - name: 📥 Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0     # Lấy toàn bộ lịch sử để có timestamp chính xác
     
     - name: 🐍 Setup Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip' # Giữ lại cache, bây giờ bạn đã có requirements.txt
+        cache: 'pip'
     
     - name: 📦 Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install pymupdf4llm
     
-    # ---- THAY ĐỔI Ở ĐÂY ----
-    - name: 🔄 Convert all PDFs to Markdown
-      run: python convert.py # Chỉ cần gọi file script
-    # ---- KẾT THÚC THAY ĐỔI ----
+    - name: 🔄 Convert PDFs to Markdown (Smart Mode)
+      id: convert
+      run: |
+        python convert.py | tee conversion_log.txt
+        echo "log_output<<EOF" >> $GITHUB_OUTPUT
+        cat conversion_log.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: 📊 Add Job Summary
+      if: always()
+      run: |
+        echo "## 📄 PDF to Markdown Conversion Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```
+        cat conversion_log.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
     
     - name: 💾 Commit converted Markdown files
       if: success()
@@ -39,20 +54,24 @@ jobs:
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         
-        git add .
+        # Chỉ add file .md mới/thay đổi
+        git add **/*.md
         
         if git diff --staged --quiet; then
-          echo "No changes to commit"
+          echo "✅ No new Markdown files to commit."
         else
-          git commit -m "🤖 Auto-convert: PDF to Markdown [skip ci]"
-          git push
+          git commit -m "🤖 Auto-convert: PDF → Markdown [skip ci]" \
+                     -m "Converted by GitHub Actions workflow" \
+                     -m "Run #${{ github.run_number }}"
+          git push origin HEAD:${{ github.ref_name }}
+          echo "✅ Committed and pushed converted files."
         fi
-        
+    
     - name: 📤 Upload Markdown files as artifacts
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: converted-markdown-files
+        name: markdown-files-${{ github.run_number }}
         path: |
           **/*.md
           !README.md
