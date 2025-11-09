@@ -3,9 +3,9 @@ name: PDF to Markdown Converter
 on:
   push:
     paths:
-      - "**.pdf"
-      - ".github/workflows/pdf-to-markdown.yml"
-      - "convert.py"
+      - '**.pdf'
+      - 'convert.py'
+      - 'requirements.txt'
   workflow_dispatch:
 
 permissions:
@@ -16,54 +16,40 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
     
-    - name: Setup Python 3.11
+    - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
-        cache: "pip"
+        python-version: '3.11'
+        cache: 'pip'
     
-    - name: Install dependencies
+    - name: Install
       run: pip install -r requirements.txt
     
-    - name: Convert PDFs to Markdown
-      run: python convert.py > conversion_log.txt 2>&1 || true
+    - name: Convert PDFs
+      run: python convert.py
     
-    - name: Show conversion log
-      if: always()
-      run: cat conversion_log.txt
-    
-    - name: Add Job Summary
-      if: always()
-      run: |
-        echo "## PDF to Markdown Conversion Report" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "~~~" >> $GITHUB_STEP_SUMMARY
-        cat conversion_log.txt >> $GITHUB_STEP_SUMMARY
-        echo "~~~" >> $GITHUB_STEP_SUMMARY
-
-    - name: Commit converted Markdown files
+    - name: Commit Markdowns
       if: success()
       run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
         git add -A
         if git diff --staged --quiet; then
-          echo "No new files to commit"
+          echo "No changes"
         else
-          git commit -m "Auto-convert: PDF to Markdown" -m "Run #${{ github.run_number }}"
+          git commit -m "Auto-convert PDF to MD"
           git push origin HEAD:${{ github.ref_name }}
         fi
-        
-    - name: Upload Markdown files as artifacts
+    
+    - name: Upload Artifacts
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: markdown-files-${{ github.run_number }}
-        path: "**/*.md"
+        name: markdowns-${{ github.run_number }}
+        path: '**/*.md'
         retention-days: 30
-        if-no-files-found: warn
