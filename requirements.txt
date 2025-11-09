@@ -1,18 +1,10 @@
-# Solution 2 Requirements - LaTeX-Aware Scientific PDF Converter
-# These are ATTEMPT candidates, not all required to install
-# Script will try: Marker → Nougat → MinerU in order
+# Bootstrap Solution 1: Requirements - Minimal Base Only
+# Layer 1 & 2 use built-in Python, Layer 4+ installs on-demand
 
-# Layer 1: Fast LaTeX support (try first)
-marker-pdf>=0.3.2
-torch>=2.0.0
-
-# Layer 2: Academic-optimized (fallback if Marker fails)  
-nougat-ocr>=0.1.0
-
-# Layer 3: Production-grade (final fallback if Nougat fails)
-mineru>=0.5.0
-
-# Base utilities (always needed)
-pypdf>=3.0.0
+# IMMEDIATE INSTALL (Layer 1+2 needs these)
 requests>=2.31.0
 urllib3>=2.0.0
+pypdf>=3.0.0
+
+# NOTE: Marker, Nougat, MinerU installed on-demand via subprocess
+# This keeps bootstrap fast and avoids circular dependency
